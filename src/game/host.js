@@ -22,7 +22,7 @@ export class PokerHost {
    * @param {number} o.stake coins each player pays in
    * @param {(seat:number, ev:object) => void} o.deliver
    */
-  constructor({ seats, stake, deliver, speed = 1, seed = randomSeed() }) {
+  constructor({ seats, stake, deliver, speed = 1, seed = randomSeed(), ready = null, paceMin = 1 }) {
     this.seats = seats.map((s) => ({ ...s, status: s.kind === 'bot' ? 'bot' : 'here', awaySince: 0 }));
     this.stake = stake;
     this.deliver = deliver;
@@ -36,6 +36,25 @@ export class PokerHost {
     this.deadline = 0;
     this.dead = false;
     this.st = null;
+    // Smooth pacing: `ready()` resolves once the local table has finished
+    // animating, so the next turn starts exactly when the last move has been
+    // shown (no rushing to catch up, no dead pauses). `paceMin` keeps a share
+    // of the fixed timings as a floor, for friends' slower phones in rooms.
+    this.ready = ready;
+    this.paceMin = paceMin;
+  }
+
+  /** Run `fn` once the table has shown everything (with a short breath). */
+  afterShown(wait, fn, beat = 150) {
+    if (!this.ready) return this.later(wait, fn);
+    let done = false;
+    const go = () => {
+      if (done || this.dead) return;
+      done = true;
+      fn();
+    };
+    this.later(wait * this.paceMin, () => Promise.resolve(this.ready()).then(() => this.later(beat, go), go));
+    this.later(Math.max(wait * 3, 7000), go); // safety net (e.g. a hidden browser tab)
   }
 
   later(ms, fn) {
@@ -62,7 +81,7 @@ export class PokerHost {
     for (let i = 0; i < this.seats.length; i++) {
       this.deliver(i, { type: 'start', you: i, seats: this.publicSeats(), stake: this.stake, prizes: this.prizeList, startStack: START_STACK, handsPerLevel: HANDS_PER_LEVEL });
     }
-    this.later(900, () => this.nextHand());
+    this.afterShown(900, () => this.nextHand(), 250);
   }
 
   // ---------------------------------------------------------------- flow
@@ -86,10 +105,10 @@ export class PokerHost {
       for (let i = 0; i < this.seats.length; i++) this.deliver(i, this.forSeat(ev, i));
       wait += this.paceOf(ev);
     }
-    if (after) this.later(wait, () => this.announceTurn(after.seat));
+    if (after) this.afterShown(wait, () => this.announceTurn(after.seat));
     else if (this.st.phase === 'handover' && !this.nextPending) {
       this.nextPending = true;
-      this.later(wait + 600, () => this.nextHand());
+      this.afterShown(wait + 600, () => this.nextHand(), 650);
     }
   }
 
@@ -140,7 +159,11 @@ export class PokerHost {
     clearTimeout(this.turnTimer);
     const id = this.turnId;
     if (s.kind === 'bot') {
-      const think = 500 + Math.random() * 900 + (la.toCall > la.pot * 0.5 ? 500 : 0);
+      // Natural, brisk thinking: quick on easy spots, a beat longer facing a
+      // big bet. Once every human has folded, the hand plays out faster.
+      let think = 380 + Math.random() * 620 + (la.toCall > la.pot * 0.5 ? 450 : 0);
+      const humanIn = this.seats.some((x, i) => x.kind === 'human' && x.status === 'here' && !st.players[i].folded && !st.players[i].busted);
+      if (!humanIn) think *= 0.55;
       this.turnTimer = this.later(think, () => this.botMove(seat, id));
     } else if (s.status !== 'here') {
       this.turnTimer = this.later(AWAY_ACT_MS, () => this.autoAct(seat, id));

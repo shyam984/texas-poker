@@ -153,7 +153,7 @@ export const WEEKLY = [
 
 // ---------------------------------------------------------------- economy
 export const START_COINS = 1000;
-export const STAKES = [100, 200, 500, 1000, 10000];
+export const STAKES = [100, 200, 400, 500, 1000, 10000];
 export const FREE_COINS = 500;
 export const FREE_EVERY_MS = 5 * 60 * 1000;
 

@@ -143,7 +143,15 @@ export function startSolo({ players, stake, level }) {
     onLeave: leaveTable,
   });
   const speed = (p.settings.fast ? 1.6 : 1) * TEST_SPEED;
-  app.host = new PokerHost({ seats, stake, speed, deliver: (i, ev) => i === 0 && app.table && app.table.push(ev) });
+  app.host = new PokerHost({
+    seats,
+    stake,
+    speed,
+    deliver: (i, ev) => i === 0 && app.table && app.table.push(ev),
+    // Solo: the game moves on exactly when your table has shown each moment.
+    ready: () => (app.table ? app.table.idle() : null),
+    paceMin: 0,
+  });
   app.host.start();
   // Bots react to big moments with an emote now and then.
   return true;

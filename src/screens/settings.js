@@ -1,6 +1,6 @@
 import * as store from '../profile/store.js';
 import { modal, $, $$ } from '../ui/kit.js';
-import { sfx, setVolumes } from '../audio.js';
+import { sfx, setVolumes, nowPlaying, nextSong, onMusicChange } from '../audio.js';
 import { platform } from '../platform.js';
 import { app } from '../app.js';
 
@@ -20,14 +20,24 @@ export function openSettings() {
       ${slider('sfxVol', 'Sound effects')}
       ${sw('music', 'Music')}
       ${slider('musicVol', 'Music')}
+      <div class="now-playing" aria-live="polite"><span class="np-ico" aria-hidden="true">♪</span><div class="np-l"><small>Now playing</small><b class="np-t"></b></div><button class="np-next" aria-label="Next song">Next ⏭</button></div>
     </div>
     <div class="set-group">
       ${sw('fast', 'Fast computer players', 'Solo games play quicker')}
       ${sw('vibrate', 'Vibration', 'On phones that support it')}
     </div>
-    <p class="m-hint keys">Keyboard: <kbd>F</kbd> fold · <kbd>C</kbd> check/call · <kbd>R</kbd> raise · <kbd>Enter</kbd> confirm</p>
+    <p class="m-hint keys">Keyboard: <kbd>F</kbd> fold · <kbd>C</kbd> check/call · <kbd>R</kbd> raise · <kbd>Enter</kbd> confirm · <kbd>H</kbd> hand rankings</p>
     ${canFs ? '<button class="btn ghost fs">⛶ Full screen</button>' : ''}
-    <button class="btn gold lg done">Done</button>`, { cls: 'settings' });
+    <button class="btn gold lg done">Done</button>`, { cls: 'settings', onClose: () => off() });
+  const np = $('.now-playing', m.el);
+  const showSong = (n) => {
+    np.classList.toggle('off', !n);
+    $('.np-t', np).textContent = n ? n.title : store.profile().settings.music ? 'Tap anywhere to start the music' : 'Music is off';
+    $('.np-next', np).disabled = !n;
+  };
+  showSong(nowPlaying());
+  const off = onMusicChange(showSong);
+  $('.np-next', np).onclick = () => (sfx('click'), nextSong());
   $$('.switch', m.el).forEach((b) =>
     b.addEventListener('click', () => {
       const key = b.dataset.key;

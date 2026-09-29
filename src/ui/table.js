@@ -8,8 +8,7 @@ import { avatarHtml } from './avatars.js';
 import { $, $$, esc, fmt, coins, coinIco, tweenNumber, wait, center, reducedMotion } from './kit.js';
 import { sfx, buzz } from '../audio.js';
 import { confetti, sparks, coinShower } from './fx.js';
-import { evaluate } from '../poker/eval.js';
-import { rankOf, suitOf, RANK_PLURAL } from '../poker/cards.js';
+import { currentHand, rankingsHtml, youHaveHtml } from './rankings.js';
 import { item } from '../profile/catalog.js';
 
 const PLACE = ['1st', '2nd', '3rd', '4th', '5th'];
@@ -39,6 +38,9 @@ export class TableView {
 
   destroy() {
     this.dead = true;
+    const w = this.idleWaiters;
+    this.idleWaiters = null;
+    if (w) for (const r of w) r();
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('orientationchange', this.onResize);
     window.removeEventListener('keydown', this.keyHandler);
@@ -71,6 +73,7 @@ export class TableView {
           <div class="pill blinds" title="Blinds"><span class="lbl">BLINDS</span><b class="bl-v">–</b><small class="bl-next"></small></div>
           <div class="pill prize" title="Prize for 1st place"><span aria-hidden="true">🏆</span><b class="pz-v">–</b></div>
           <span class="grow"></span>
+          <button class="icon-btn t-help" aria-label="Hand rankings" title="Hand rankings (H)" aria-expanded="false">?</button>
           <button class="icon-btn t-mute" aria-label="Mute"></button>
           <button class="icon-btn t-settings" aria-label="Settings">⚙</button>
         </header>
@@ -120,6 +123,12 @@ export class TableView {
         <div class="emote-tray" hidden>${emotes
           .map((e) => `<button class="em ${e.sticker ? 'sticker' : ''}" data-e="${e.key}" aria-label="${esc(e.name)}">${e.glyph ? e.glyph : esc(e.sticker)}</button>`)
           .join('')}</div>
+        <div class="hr-panel" hidden role="dialog" aria-label="Hand rankings">
+          <div class="hr-head"><div><h3>Hand rankings</h3><small>Best hand at the top · use your 2 cards + the table</small></div><button class="icon-btn hr-x" aria-label="Close hand rankings">✕</button></div>
+          <div class="hr-you-box"></div>
+          <div class="hr-body"></div>
+          <p class="hr-tip">Same hand? Higher cards win (a pair of Kings beats a pair of 7s). Suits never rank. Ace can be low too: A-2-3-4-5.</p>
+        </div>
         <div class="fly"></div>
         <div class="banner" aria-live="assertive"></div>
       </div>`;
@@ -158,9 +167,16 @@ export class TableView {
       blNext: q('.bl-next'),
       pzV: q('.pz-v'),
       mute: q('.t-mute'),
+      help: q('.t-help'),
+      hr: q('.hr-panel'),
     };
     q('.t-leave').onclick = () => this.o.onLeave();
     q('.t-settings').onclick = () => this.o.onSettings();
+    this.el.help.onclick = (e) => {
+      e.stopPropagation();
+      this.toggleRanks();
+    };
+    q('.hr-x').onclick = () => this.toggleRanks(false);
     this.el.mute.onclick = () => {
       this.o.onMute();
       this.updateMute();
@@ -207,6 +223,7 @@ export class TableView {
     });
     this.el.screen.addEventListener('click', (e) => {
       if (!this.el.tray.hidden && !e.target.closest('.emote-tray, .emote-btn')) this.el.tray.hidden = true;
+      if (!this.el.hr.hidden && !e.target.closest('.hr-panel, .t-help, .my-hand-label, .hud, .tbar')) this.toggleRanks(false);
     });
   }
 
@@ -214,6 +231,69 @@ export class TableView {
     const on = this.o.soundOn();
     this.el.mute.textContent = on ? '🔊' : '🔇';
     this.el.mute.setAttribute('aria-label', on ? 'Mute' : 'Unmute');
+  }
+
+  // ---------------------------------------------------------------- hand rankings (?)
+  myHand() {
+    const s = this.s;
+    if (!s || s.busted[s.you]) return null;
+    return currentHand(s.cards[s.you], s.board);
+  }
+
+  toggleRanks(open = this.el.hr.hidden) {
+    const p = this.el.hr;
+    if (open === !p.hidden) return;
+    sfx(open ? 'pop' : 'click');
+    p.hidden = !open;
+    this.el.help.classList.toggle('on', open);
+    this.el.help.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    this.renderRanks();
+    this.fitRanks();
+    this.scrollRanks();
+    p.classList.remove('in');
+    void p.offsetWidth;
+    p.classList.add('in');
+  }
+
+  renderRanks() {
+    if (this.el.hr.hidden) return;
+    const s = this.s;
+    const cur = this.myHand();
+    const folded = !!(s && s.folded[s.you] && cur);
+    $('.hr-you-box', this.el.hr).innerHTML = youHaveHtml(cur, { folded });
+    // Only rebuild the chart when the highlighted row changes.
+    const key = cur ? cur.key : '';
+    if (this.hrKey !== key || !$('.hh', this.el.hr)) {
+      this.hrKey = key;
+      $('.hr-body', this.el.hr).innerHTML = rankingsHtml(cur, { compact: true });
+      this.scrollRanks();
+    }
+  }
+
+  /** Bring your row into the middle of the list (without moving the page). */
+  scrollRanks() {
+    const body = $('.hr-body', this.el.hr);
+    const row = $('.hh.you', this.el.hr);
+    this.el.hr.scrollTop = 0;
+    if (!row || this.el.hr.hidden) return;
+    const br = body.getBoundingClientRect();
+    const rr = row.getBoundingClientRect();
+    body.scrollTop += rr.top - br.top - (br.height - rr.height) / 2;
+  }
+
+  /** Keep the panel clear of the action buttons. */
+  fitRanks() {
+    const p = this.el.hr;
+    if (p.hidden) return;
+    p.style.maxHeight = '';
+    const scr = this.el.screen.getBoundingClientRect();
+    const pr = p.getBoundingClientRect();
+    const act = $('.hud-act', this.root).getBoundingClientRect();
+    const hud = $('.hud', this.root).getBoundingClientRect();
+    const sideBySide = pr.right + 8 < act.left;
+    const bottom = sideBySide ? scr.bottom - 8 : hud.top + 4;
+    p.style.maxHeight = `${Math.max(160, bottom - pr.top)}px`;
   }
 
   // ---------------------------------------------------------------- geometry
@@ -284,6 +364,7 @@ export class TableView {
       b.style.top = `${p.y}px`;
     }
     this.placeDealer(false);
+    this.fitRanks();
   }
 
   betPoint(seat) {
@@ -353,8 +434,10 @@ export class TableView {
       if (me) {
         this.el.hudMe.innerHTML = '';
         this.el.hudMe.appendChild(d);
-        const lab = document.createElement('div');
+        const lab = document.createElement('button');
         lab.className = 'my-hand-label';
+        lab.title = 'Hand rankings';
+        lab.onclick = (e) => (e.stopPropagation(), this.toggleRanks());
         this.el.hudMe.appendChild(lab);
       } else this.el.seats.appendChild(d);
       const b = document.createElement('div');
@@ -518,12 +601,21 @@ export class TableView {
     if (!this.busy) this.run();
   }
 
+  /** Resolves once every queued event has been shown. */
+  idle() {
+    if (this.dead || (!this.busy && !this.queue.length)) return Promise.resolve();
+    return new Promise((r) => (this.idleWaiters || (this.idleWaiters = [])).push(r));
+  }
+
   async run() {
     this.busy = true;
     while (this.queue.length && !this.dead) {
       const ev = this.queue.shift();
       const saved = this.speed;
-      if (this.queue.length > 6) this.speed = Math.min(this.speed, 0.25); // catch up if behind
+      // If we fall behind (slow phone, hidden tab, network burst), speed up
+      // gently in proportion to how far behind we are rather than jumping.
+      const behind = this.queue.length;
+      if (behind > 4) this.speed = Math.min(this.speed, behind > 10 ? 0.35 : 0.6);
       try {
         await this.handle(ev);
       } catch (err) {
@@ -532,6 +624,9 @@ export class TableView {
       this.speed = saved;
     }
     this.busy = false;
+    const w = this.idleWaiters;
+    this.idleWaiters = null;
+    if (w) for (const r of w) r();
   }
 
   handle(ev) {
@@ -636,6 +731,7 @@ export class TableView {
       if (!t.classList.contains('out')) t.classList.remove('show', 'allin');
     }
     $('.my-hand-label', this.root).textContent = '';
+    $('.my-hand-label', this.root).className = 'my-hand-label';
     for (let i = 0; i < s.n; i++) {
       s.folded[i] = false;
       s.allIn[i] = false;
@@ -649,6 +745,7 @@ export class TableView {
     this.el.pot.classList.remove('show');
     this.placeDealer(true);
     this.hideActions();
+    this.renderRanks();
     await this.wait(260);
   }
 
@@ -971,6 +1068,10 @@ export class TableView {
   }
 
   onKey(e) {
+    if (e.target.closest && e.target.closest('input:not(.rp-range)')) return;
+    const key = e.key.toLowerCase();
+    if (!document.querySelector('.modal-wrap') && (key === 'h' || key === '?')) return this.toggleRanks();
+    if (key === 'escape' && !this.el.hr.hidden) return this.toggleRanks(false);
     if (!this.s || !this.s.legal || e.target.closest('input:not(.rp-range)') || document.querySelector('.modal-wrap')) return;
     const k = e.key.toLowerCase();
     if (!this.el.rp.hidden) {
@@ -1029,45 +1130,46 @@ export class TableView {
         }),
       ),
     );
-    await this.wait(380);
+    await this.wait(260);
     this.updateMyHand();
   }
 
-  /** Shows the name of your best hand under your cards. */
+  /**
+   * Shows the name of your best hand above your cards and lights up the
+   * cards that make a match (pair, trips, straight…), on your hand and the
+   * board, so you can see at a glance what you've got.
+   */
   updateMyHand() {
     const s = this.s;
     const lab = $('.my-hand-label', this.root);
     if (!lab) return;
-    const mine = s.cards[s.you].filter(Boolean);
-    if (mine.length < 2 || s.folded[s.you] || s.busted[s.you]) {
-      lab.textContent = s.folded[s.you] ? 'Folded' : '';
-      lab.className = 'my-hand-label';
+    for (const c of $$('.pcard.match', this.root)) c.classList.remove('match');
+    const cur = s.folded[s.you] || s.busted[s.you] ? null : this.myHand();
+    if (!cur) {
+      lab.innerHTML = s.folded[s.you] ? 'Folded' : '';
+      lab.className = `my-hand-label ${s.folded[s.you] ? 'show' : ''}`;
+      this.renderRanks();
       return;
     }
-    let text;
-    let cat = 0;
-    if (s.board.length >= 3) {
-      const e = evaluate(mine.concat(s.board));
-      text = e.name;
-      cat = e.cat;
-      if (cat >= 3 && (this.lastCat ?? -1) < 3 && Math.random() < 0.7) this.react(s.you, 'excited');
-    } else {
-      const [a, b] = mine;
-      const ra = rankOf(a);
-      const rb = rankOf(b);
-      if (ra === rb) {
-        text = `Pocket ${RANK_PLURAL[ra]}`;
-        cat = 1;
-      } else {
-        const hi = Math.max(ra, rb);
-        const lo = Math.min(ra, rb);
-        const L = (r) => ({ 14: 'A', 13: 'K', 12: 'Q', 11: 'J', 10: '10' })[r] || String(r);
-        text = `${L(hi)}-${L(lo)}${suitOf(a) === suitOf(b) ? ' suited' : ''}`;
-      }
+    let text = cur.name;
+    if (s.board.length < 3 && cur.cat === 0) {
+      // Before the flop, name the two cards: "A-K suited".
+      const L = (c) => ({ T: '10' })[c[0]] || c[0];
+      const [a, b] = cur.best;
+      const [hi, lo] = 'AKQJT98765432'.indexOf(a[0]) <= 'AKQJT98765432'.indexOf(b[0]) ? [a, b] : [b, a];
+      text = `${L(hi)}-${L(lo)}${a[1] === b[1] ? ' suited' : ''}`;
+    } else if (s.board.length < 3) text = cur.name.replace('Pair of', 'Pocket');
+    if (cur.cat >= 3 && (this.lastCat ?? -1) < 3 && Math.random() < 0.7) this.react(s.you, 'excited');
+    this.lastCat = cur.cat;
+    lab.innerHTML = `${cur.cat >= 1 ? '<i class="mh-ok" aria-hidden="true">✓</i>' : ''}<span>${esc(text)}</span><i class="mh-q" aria-hidden="true">?</i>`;
+    lab.setAttribute('aria-label', `Your hand: ${text}. Show hand rankings`);
+    lab.className = `my-hand-label show c${cur.cat}`;
+    if (cur.cat >= 1 && !this.el.screen.classList.contains('showdown')) {
+      const set = new Set(cur.making);
+      const mine = $$('.s-cards .pcard', this.seatEl(s.you));
+      for (const c of mine.concat($$('.board .pcard', this.root))) if (c.dataset.card && set.has(c.dataset.card)) c.classList.add('match');
     }
-    this.lastCat = cat;
-    lab.textContent = text;
-    lab.className = `my-hand-label show c${cat}`;
+    this.renderRanks();
   }
 
   async onReveal(ev) {
@@ -1174,6 +1276,7 @@ export class TableView {
 
   highlight(best, seats) {
     this.el.screen.classList.add('showdown');
+    for (const c of $$('.pcard.match', this.root)) c.classList.remove('match');
     const set = new Set(best);
     for (const c of $$('.pcard', this.root)) {
       const on = c.dataset.card && set.has(c.dataset.card) && (c.classList.contains('board-card') || seats.includes(Number(c.closest('.seat')?.dataset.seat)));

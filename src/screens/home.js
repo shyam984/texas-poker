@@ -29,6 +29,7 @@ export function topBar({ back = false } = {}) {
       </button>
       <span class="grow"></span>
       <div class="pill coins-pill" title="Your coins"><span class="coin"></span><b class="coins-v" data-v="${p.coins}">${fmt(p.coins)}</b></div>
+      <button class="icon-btn music-btn ${p.settings.music ? 'on' : ''}" aria-label="Music" aria-pressed="${!!p.settings.music}" title="Music on/off"><span class="mb-note" aria-hidden="true">♪</span></button>
       <button class="icon-btn settings-btn" aria-label="Settings">⚙</button>
     </header>`;
 }
@@ -38,6 +39,15 @@ export function bindTopBar(root) {
   if (b) b.onclick = () => (sfx('nav'), go('home'));
   $('.me-chip', root).onclick = () => (sfx('nav'), go('collection'));
   $('.settings-btn', root).onclick = () => (sfx('click'), openSettings());
+  const mb = $('.music-btn', root);
+  mb.onclick = () => {
+    const on = !store.profile().settings.music;
+    store.setSetting('music', on);
+    mb.classList.toggle('on', on);
+    mb.setAttribute('aria-pressed', String(on));
+    sfx('click');
+    toast(on ? '♪ Music on' : 'Music off');
+  };
 }
 
 export function refreshCoins() {

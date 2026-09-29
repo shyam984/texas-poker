@@ -5,6 +5,7 @@ import * as progress from './profile/progress.js';
 import { app, go } from './app.js';
 import { initFx } from './ui/fx.js';
 import { $, toast, coins, confirmBox, esc } from './ui/kit.js';
+import * as audio from './audio.js';
 import { setSoundEnabled, setMusicEnabled, setVolumes, setExternalMute } from './audio.js';
 import { initPlatform, platform } from './platform.js';
 import { cleanCode } from './net.js';
@@ -64,7 +65,7 @@ async function boot() {
       else sessionStorage.removeItem('texaspoker.active');
     }
   }
-  window.__tx = { app, store, progress }; // for testing
+  window.__tx = { app, store, progress, audio }; // for testing
 }
 
 boot();

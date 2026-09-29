@@ -6,9 +6,17 @@ Plain HTML, CSS and JavaScript — no build step, no server. Upload the files to
 
 ## How a game works
 
-- 2–5 players. Everyone pays the **stake** (100 / 200 / 500 / 1,000 / 10,000 coins) and gets 1,000 chips.
+- 2–5 players. Everyone pays the **stake** (100 / 200 / 400 / 500 / 1,000 / 10,000 coins) and gets 1,000 chips.
 - Real Texas Hold'em: 2 hole cards each, flop / turn / river, dealer button, small and big blind, check / bet / call / raise / fold / all-in, minimum raises, side pots, split pots.
 - Blinds go up every 5 hands. Run out of chips and you're out. **The last player with chips wins the prize**: with 4–5 players the winner gets everything except the 2nd-place player's stake, which is returned; with 2–3 players the winner takes it all.
+
+## Hand rankings at the table
+
+Tap **?** in the top bar (or your hand's name above your cards, or press **H**) to open the hand-rankings chart without leaving the game. It shows every hand from Royal Flush down to High Card with example cards, lights up **your current hand**, and shows your best five cards with the matching ones highlighted. At the table, cards that make a match (a pair, three of a kind, a straight…) glow green, so you can see what you've got at a glance.
+
+## Music
+
+Four relaxing songs, composed in code (no audio files): **Cosy Corner** and **Sunny Hammock** on the menus, **Velvet Lounge** and **Beach Bossa** during games. Each is prepared once in the background and then plays from memory, so it never stutters during play. Songs change every couple of minutes; **Settings → Next** skips, and the ♪ button on the menus turns music on or off. Browsers only allow sound after your first tap or key press.
 
 ## Rewards and progress
 
@@ -30,7 +38,7 @@ Coins and progress are saved in each player's browser. There's no server, so a d
 ## Controls
 
 - **Touch or mouse**: big Fold / Check / Call / Raise buttons; Raise opens a slider with ½, ⅔, ¾ pot, pot and all-in presets. Pre-select *Check / Fold* or *Call any* while you wait.
-- **Keyboard**: F fold · C check/call · R raise · Enter confirm · Esc cancel.
+- **Keyboard**: F fold · C check/call · R raise · Enter confirm · Esc cancel · H hand rankings.
 - Works on desktop, tablets and phones (portrait and landscape). Respects the reduced-motion setting.
 
 ## Files
@@ -47,9 +55,9 @@ src/game/session.js        stake, prizes, progression hooks, solo games
 src/profile/catalog.js     items, the free pass, missions, economy numbers
 src/profile/store.js       saved profile
 src/profile/progress.js    XP, levels, pass, missions, chest, free coins, badges
-src/ui/*.js                table view, cards, chips, avatars, item art, effects, helpers
+src/ui/*.js                table view, hand rankings, cards, chips, avatars, item art, effects, helpers
 src/screens/*.js           home, onboarding, solo setup, rooms, results, pass, chest, missions, collection, how to play, settings
-src/audio.js               synthesised sound effects and music
+src/audio.js               synthesised sound effects and the four songs
 src/net.js                 room codes and connections
 src/platform.js            optional CrazyGames SDK (only loads on crazygames.com)
 vendor/peerjs.min.js

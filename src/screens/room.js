@@ -251,6 +251,10 @@ function hostStart() {
     seats,
     stake: L.stake,
     speed: Number(new URLSearchParams(location.search).get('speed')) || 1,
+    // Friends' tables animate on their own phones, so keep most of the fixed
+    // timing as a floor and also wait for the host's own table.
+    ready: () => (app.table ? app.table.idle() : null),
+    paceMin: 0.75,
     deliver: (i, ev) => {
       if (i === 0) return app.table && app.table.push(ev);
       const s = L.seats[i];
