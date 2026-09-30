@@ -55,7 +55,7 @@ src/game/session.js        stake, prizes, progression hooks, solo games
 src/profile/catalog.js     items, the free pass, missions, economy numbers
 src/profile/store.js       saved profile
 src/profile/progress.js    XP, levels, pass, missions, chest, free coins, badges
-src/ui/*.js                table view, hand rankings, cards, chips, avatars, item art, effects, helpers
+src/ui/*.js                table view, lounge scene, hand rankings, cards, chips, avatars, item art, effects, helpers
 src/screens/*.js           home, onboarding, solo setup, rooms, results, pass, chest, missions, collection, how to play, settings
 src/audio.js               synthesised sound effects and the four songs
 src/net.js                 room codes and connections

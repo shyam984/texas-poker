@@ -9,9 +9,25 @@ import { $, $$, esc, fmt, coins, coinIco, tweenNumber, wait, center, reducedMoti
 import { sfx, buzz } from '../audio.js';
 import { confetti, sparks, coinShower } from './fx.js';
 import { currentHand, rankingsHtml, youHaveHtml } from './rankings.js';
+import { sceneHtml } from './scene.js';
 import { item } from '../profile/catalog.js';
 
 const PLACE = ['1st', '2nd', '3rd', '4th', '5th'];
+// The logo printed on the felt: crown, TEXAS / POKER and the four suits.
+const FELT_LOGO = `<svg viewBox="0 0 220 132" class="fl-svg">
+  <defs>
+    <linearGradient id="flT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8f6ff"/><stop offset=".55" stop-color="#4cc3ff"/><stop offset="1" stop-color="#2a7dff"/></linearGradient>
+    <linearGradient id="flP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff5a8"/><stop offset=".5" stop-color="#ffc629"/><stop offset="1" stop-color="#ff9500"/></linearGradient>
+  </defs>
+  <path d="M86 26 90 4l12 12 8-14 8 14 12-12 4 22Z" fill="url(#flP)" stroke="#6b3f00" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="110" cy="3" r="3.5" fill="#fff5a8" stroke="#6b3f00" stroke-width="2"/>
+  <text x="110" y="62" text-anchor="middle" class="fl-word" fill="url(#flT)">TEXAS</text>
+  <text x="110" y="104" text-anchor="middle" class="fl-word" fill="url(#flP)">POKER</text>
+  <g transform="translate(110 122)" class="fl-suit">
+    <text x="-33" text-anchor="middle" fill="#16161f">♠</text><text x="-11" text-anchor="middle" fill="#d8132f">♥</text>
+    <text x="11" text-anchor="middle" fill="#d8132f">♦</text><text x="33" text-anchor="middle" fill="#16161f">♣</text>
+  </g>
+</svg>`;
 const ACTION_WORD = { fold: 'FOLD', check: 'CHECK', call: 'CALL', bet: 'BET', raise: 'RAISE', allin: 'ALL IN' };
 
 export class TableView {
@@ -68,6 +84,7 @@ export class TableView {
     const emotes = (this.o.emotes || []).map((id) => item(id)).filter(Boolean);
     this.root.innerHTML = `
       <div class="tbl-screen tbl-${esc(this.o.table || 'classic')}">
+        ${sceneHtml()}
         <header class="tbar">
           <button class="icon-btn t-leave" aria-label="Leave table" title="Leave table">✕</button>
           <div class="pill blinds" title="Blinds"><span class="lbl">BLINDS</span><b class="bl-v">–</b><small class="bl-next"></small></div>
@@ -81,7 +98,7 @@ export class TableView {
           <div class="felt-box">
             <div class="felt">
               <div class="felt-inner"></div>
-              <div class="felt-logo" aria-hidden="true"><span>TEXAS</span><span>POKER</span></div>
+              <div class="felt-logo" aria-hidden="true">${FELT_LOGO}</div>
               <div class="deck" aria-hidden="true"><i></i><i></i><i></i></div>
               <div class="pot" aria-live="polite"><span class="pot-chips"></span><span class="pot-lbl">POT <b class="pot-v">0</b></span></div>
               <div class="board" aria-label="Community cards">${'<div class="slot"></div>'.repeat(5)}</div>
@@ -369,9 +386,13 @@ export class TableView {
 
   betPoint(seat) {
     const a = this.angle(seat);
-    const kx = this.portrait ? 0.62 : 0.66;
-    const ky = this.portrait ? 0.68 : 0.6;
-    return { x: this.fw / 2 + Math.cos(a) * (this.fw / 2) * kx, y: this.fh / 2 + Math.sin(a) * (this.fh / 2) * ky };
+    const kx = this.portrait ? 0.62 : 0.76;
+    const ky = this.portrait ? 0.68 : 0.7;
+    const bw = parseFloat(this.el.screen.style.getPropertyValue('--bw')) || 60;
+    let y = this.fh / 2 + Math.sin(a) * (this.fh / 2) * ky;
+    // Tall tables: side seats bet just below the board row so chips never cover the cards.
+    if (this.portrait && Math.abs(Math.sin(a)) < 0.55) y = this.fh / 2 + bw * 1.1 + Math.sin(a) * bw * 0.3;
+    return { x: this.fw / 2 + Math.cos(a) * (this.fw / 2) * kx, y };
   }
 
   placeDealer(animate = true) {
@@ -383,8 +404,18 @@ export class TableView {
     const a = this.angle(s.dealer);
     const p = this.betPoint(s.dealer);
     const off = Math.max(18, this.fw * 0.045);
-    const x = p.x + Math.cos(a + Math.PI / 2) * off * 1.3 + Math.cos(a) * off * 0.25;
+    let x = p.x + Math.cos(a + Math.PI / 2) * off * 1.6 + Math.cos(a) * off * 0.25;
     const y = p.y + Math.sin(a + Math.PI / 2) * off * 0.8 + Math.sin(a) * off * 0.25;
+    // Never cover the logo on the felt: slide the button to its side.
+    const lg = $('.fl-svg', this.el.felt);
+    if (lg) {
+      const L = lg.getBoundingClientRect();
+      const B = this.el.box.getBoundingClientRect();
+      const lx = L.left - B.left;
+      const ly = L.top - B.top;
+      const r = 18;
+      if (L.width && x + r > lx && x - r < lx + L.width && y + r > ly && y - r < ly + L.height) x = x < lx + L.width / 2 ? lx - r - 4 : lx + L.width + r + 4;
+    }
     this.el.dbtn.style.transition = animate ? '' : 'none';
     this.el.dbtn.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
     this.el.dbtn.classList.add('show');
